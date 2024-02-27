@@ -162,16 +162,6 @@
             (values rs
                (λ () (stream-port (seed->rands seed) port)))))
 
-      ;; dict paths → gen
-      ;; gen :: rs → rs' ll meta
-      (define (stdin-generator rs online?)
-         (lets
-            ((rs ll (port->stream rs stdin))
-             (ll (if online? ll (force-ll ll)))) ;; preread if necessary
-            (λ (rs)
-               ;; note: independent of rs. could in offline case read big chunks and resplit each.
-               ;; not doing now because online case is 99.9% of stdin uses
-               (values rs ll (put empty 'generator 'stdin)))))
 
       (define (random-block rs n out)
          (if (eq? n 0)
@@ -201,13 +191,33 @@
             (print*-to stderr (list "Error: failed to open '" path "'")))
          (halt exit-read-error))
 
+      (define (choose-path-pos rs paths max)
+         (if (eq? max 1)
+            (values rs 0)
+            (rand rs max)))
+
+      ;; dict paths → gen
+      ;; gen :: rs → rs' ll meta
+      (define (stdin-generator rs online?)
+         (if online?
+            ;; stream data in without prereading to fuzz once
+            (λ (rs)
+               (lets ((rs ll (port->stream rs stdin)))
+                  (values rs ll (put empty 'generator 'stdin))))
+            ;; read the input to memory to be able to fuzz many times
+            (lets ((rs ll (port->stream rs stdin))
+                   (ll (force-ll ll)))
+               (λ (rs)
+                  ;; note: independent of rs. could in offline case read big chunks and resplit each.
+                  ;; not doing now because online case is 99.9% of stdin uses
+                  (values rs ll (put empty 'generator 'stdin))))))
+
       ;; paths → (rs → rs' ll|#false meta|error-str)
       (define (file-streamer paths)
-         (lets
-            ((n (vector-length paths)))
+         (lets ((n (vector-length paths)))
             (define (gen rs)
                (lets
-                  ((rs n (rand rs n))
+                  ((rs n (choose-path-pos rs paths n))
                    (path (vector-ref paths n))
                    (port (open-input-file path)))
                   (if port
