@@ -1,0 +1,65 @@
+name: Build Radamsa Library
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+
+jobs:
+  build-library:
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            cc: gcc
+          - arch: arm32
+            cc: arm-linux-gnueabihf-gcc
+    
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc make git wget
+    
+    - name: Install ARM32 cross-compiler
+      if: matrix.arch == 'arm32'
+      run: |
+        sudo apt-get install -y gcc-arm-linux-gnueabihf
+    
+    - name: Build library
+      env:
+        CC: ${{ matrix.cc }}
+      run: |
+        make bin/ol
+        make lib/hex
+        make lib/libradamsa.a
+        make lib/libradamsa.so
+    
+    - name: Test library (x86_64 only)
+      if: matrix.arch == 'x86_64'
+      run: |
+        make libradamsa-test
+    
+    - name: Package library
+      run: |
+        mkdir -p radamsa-library/lib
+        mkdir -p radamsa-library/include
+        cp lib/libradamsa.a radamsa-library/lib/
+        cp lib/libradamsa.so radamsa-library/lib/
+        cp c/radamsa.h radamsa-library/include/
+        cp LICENCE radamsa-library/
+    
+    - name: Upload library artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: radamsa-library-linux-${{ matrix.arch }}
+        path: radamsa-library/
