@@ -11,14 +11,13 @@ jobs:
   build-library:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
         include:
-          - os: ubuntu-latest
-            platform: linux
-          - os: macos-latest
-            platform: macos
+          - arch: x86_64
+            cc: gcc
+          - arch: arm32
+            cc: arm-linux-gnueabihf-gcc
     
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     
     steps:
     - name: Checkout repository
@@ -26,25 +25,27 @@ jobs:
       with:
         submodules: recursive
     
-    - name: Install dependencies (Ubuntu)
-      if: matrix.os == 'ubuntu-latest'
+    - name: Install dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y gcc make git wget
     
-    - name: Install dependencies (macOS)
-      if: matrix.os == 'macos-latest'
+    - name: Install ARM32 cross-compiler
+      if: matrix.arch == 'arm32'
       run: |
-        brew install gcc make git wget
+        sudo apt-get install -y gcc-arm-linux-gnueabihf
     
     - name: Build library
+      env:
+        CC: ${{ matrix.cc }}
       run: |
         make bin/ol
         make lib/hex
         make lib/libradamsa.a
         make lib/libradamsa.so
     
-    - name: Test library
+    - name: Test library (x86_64 only)
+      if: matrix.arch == 'x86_64'
       run: |
         make libradamsa-test
     
@@ -60,5 +61,5 @@ jobs:
     - name: Upload library artifact
       uses: actions/upload-artifact@v4
       with:
-        name: radamsa-library-${{ matrix.platform }}
+        name: radamsa-library-linux-${{ matrix.arch }}
         path: radamsa-library/
