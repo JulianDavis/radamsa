@@ -1,0 +1,64 @@
+name: Build Radamsa Library
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+
+jobs:
+  build-library:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: macos-latest
+            platform: macos
+    
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Install dependencies (Ubuntu)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc make git wget
+    
+    - name: Install dependencies (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        brew install gcc make git wget
+    
+    - name: Build library
+      run: |
+        make bin/ol
+        make lib/hex
+        make lib/libradamsa.a
+        make lib/libradamsa.so
+    
+    - name: Test library
+      run: |
+        make libradamsa-test
+    
+    - name: Package library
+      run: |
+        mkdir -p radamsa-library/lib
+        mkdir -p radamsa-library/include
+        cp lib/libradamsa.a radamsa-library/lib/
+        cp lib/libradamsa.so radamsa-library/lib/
+        cp c/radamsa.h radamsa-library/include/
+        cp LICENCE radamsa-library/
+    
+    - name: Upload library artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: radamsa-library-${{ matrix.platform }}
+        path: radamsa-library/
